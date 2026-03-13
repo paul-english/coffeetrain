@@ -14,63 +14,76 @@ Lightweight event-driven PyTorch trainer with composable callbacks. Inspired by 
 The trainer fires events at fixed points in the training loop. Callbacks implement matching methods to hook into any stage.
 
 ```mermaid
-flowchart TD
-    INIT["INIT"]
-    FIT_START["FIT_START"]
-    EPOCH_START["EPOCH_START"]
-    BATCH_START["BATCH_START"]
-    BF["BEFORE_FORWARD"]
-    AF["AFTER_FORWARD"]
-    BL["BEFORE_LOSS"]
-    AL["AFTER_LOSS"]
-    BB["BEFORE_BACKWARD"]
-    AB["AFTER_BACKWARD"]
-    BATCH_END["BATCH_END"]
-    MORE_BATCHES{more batches?}
-    EPOCH_END["EPOCH_END"]
-    EVAL_CHECK{eval this epoch?}
-    EVAL_START["EVAL_START"]
-    EBS["EVAL_BATCH_START"]
-    EBF["EVAL_BEFORE_FORWARD"]
-    EAF["EVAL_AFTER_FORWARD"]
-    EBE["EVAL_BATCH_END"]
-    MORE_EVAL{more eval batches?}
-    EVAL_END["EVAL_END"]
-    MORE_EPOCHS{more epochs?}
-    INTERRUPTED["TRAINING_INTERRUPTED"]
-    FIT_END["FIT_END"]
+flowchart LR
+    INIT["INIT"] --> FIT_START["FIT_START"] --> EPOCH_START["EPOCH_START"]
 
-    INIT --> FIT_START --> EPOCH_START --> BATCH_START
-    BATCH_START --> BF --> AF --> BL --> AL --> BB --> AB --> BATCH_END
-    BATCH_END --> MORE_BATCHES
-    MORE_BATCHES -- yes --> BATCH_START
-    MORE_BATCHES -- no --> EPOCH_END
-    EPOCH_END --> EVAL_CHECK
-    EVAL_CHECK -- yes --> EVAL_START --> EBS
-    EBS --> EBF --> EAF --> EBE
-    EBE --> MORE_EVAL
-    MORE_EVAL -- yes --> EBS
-    MORE_EVAL -- no --> EVAL_END --> MORE_EPOCHS
-    EVAL_CHECK -- no --> MORE_EPOCHS
-    MORE_EPOCHS -- yes --> EPOCH_START
-    MORE_EPOCHS -- no --> FIT_END
-    MORE_BATCHES -. "SIGINT / SIGTERM" .-> INTERRUPTED --> FIT_END
+    EPOCH_START --> BS["BATCH_START"]
+    subgraph batch [" training batch "]
+        direction TB
+        BS --> BF["BEFORE_FORWARD"] --> AF["AFTER_FORWARD"]
+        AF --> BL["BEFORE_LOSS"] --> AL["AFTER_LOSS"]
+        AL --> BB["BEFORE_BACKWARD"] --> AB["AFTER_BACKWARD"]
+        AB --> BE["BATCH_END"]
+    end
+    BE --> MORE{more batches?}
+    MORE -- yes --> BS
+    MORE -- no --> EPOCH_END["EPOCH_END"]
+
+    EPOCH_END --> EVAL_CHECK{eval?}
+    EVAL_CHECK -- yes --> ES["EVAL_START"]
+    subgraph eval [" evaluation "]
+        direction TB
+        ES --> EBS["EVAL_BATCH_START"] --> EBF["EVAL_BEFORE_FORWARD"]
+        EBF --> EAF["EVAL_AFTER_FORWARD"] --> EBE["EVAL_BATCH_END"]
+        EBE --> EMORE{more?}
+        EMORE -- yes --> EBS
+    end
+    EMORE -- no --> EE["EVAL_END"]
+    EE --> NEXT{next epoch?}
+    EVAL_CHECK -- no --> NEXT
+    NEXT -- yes --> EPOCH_START
+    NEXT -- no --> FIT_END["FIT_END"]
+
+    MORE -. "SIGINT / SIGTERM" .-> INT["TRAINING_INTERRUPTED"] --> FIT_END
 
     style INIT fill:#4a9eff,color:#fff
     style FIT_START fill:#4a9eff,color:#fff
     style FIT_END fill:#4a9eff,color:#fff
-    style INTERRUPTED fill:#e74c3c,color:#fff
+    style INT fill:#e74c3c,color:#fff
     style EPOCH_START fill:#2ecc71,color:#fff
     style EPOCH_END fill:#2ecc71,color:#fff
-    style EVAL_START fill:#f39c12,color:#fff
-    style EVAL_END fill:#f39c12,color:#fff
-    style EBS fill:#f5b041,color:#fff
-    style EBF fill:#f5b041,color:#fff
-    style EAF fill:#f5b041,color:#fff
-    style EBE fill:#f5b041,color:#fff
+    style ES fill:#f39c12,color:#fff
+    style EE fill:#f39c12,color:#fff
+    style batch fill:#e8f0fe,stroke:#6c8ebf
+    style eval fill:#fef5e7,stroke:#f39c12
 ```
 
-Each event is dispatched via `_run_event()`, which calls the matching method on every registered callback with the shared `State` object. Callbacks can read or mutate state — for example, setting `state.stop_training = True` to trigger early stopping.
+Each event is dispatched via `_run_event()`, which calls the matching method on every registered callback with the shared `State` object. Callbacks can read or mutate state (e.g. `state.stop_training = True`).
+
+### Events
+
+| Event | Phase | Description |
+|-------|-------|-------------|
+| `init` | Setup | After `Trainer()` construction, before `fit()` |
+| `fit_start` | Fit | Start of `fit()`, before any training |
+| `fit_end` | Fit | End of `fit()`, after all training |
+| `training_interrupted` | Fit | SIGINT/SIGTERM received (fires before `fit_end`) |
+| `epoch_start` | Epoch | Start of each epoch |
+| `epoch_end` | Epoch | End of each epoch, before evaluation |
+| `batch_start` | Batch | Start of each training batch |
+| `before_forward` | Batch | Before `model.forward()` |
+| `after_forward` | Batch | After `model.forward()`; `state.outputs` now set |
+| `before_loss` | Batch | Before `model.loss()` |
+| `after_loss` | Batch | After `model.loss()`; `state.loss` now set |
+| `before_backward` | Batch | Before `loss.backward()` |
+| `after_backward` | Batch | After `loss.backward()`, before optimizer step |
+| `batch_end` | Batch | After optimizer + scheduler step |
+| `eval_start` | Eval | Start of evaluation pass |
+| `eval_batch_start` | Eval | Start of each eval batch |
+| `eval_before_forward` | Eval | Before `model.forward()` during eval |
+| `eval_after_forward` | Eval | After `model.forward()` during eval |
+| `eval_batch_end` | Eval | End of each eval batch |
+| `eval_end` | Eval | End of evaluation pass |
 
 ## Installation
 
