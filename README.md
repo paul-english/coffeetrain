@@ -1,6 +1,6 @@
 # coffeetrain
 
-Lightweight event-driven PyTorch trainer with composable callbacks. Inspired by MosaicML Composer but implemented fewer external dependencies for maximum compatibility.
+Lightweight event-driven PyTorch trainer with composable callbacks. Inspired by [MosaicML Composer](https://github.com/mosaicml/composer) but implemented fewer external dependencies and allowing a newer PyTorch version (2.10 as of this point).
 
 ## Features
 
@@ -67,3 +67,11 @@ trainer.fit()
 ## License
 
 Apache-2.0
+
+## Tests
+
+From repository root:
+
+```bash
+uv run pytest packages/coffeetrain/tests -q
+```
