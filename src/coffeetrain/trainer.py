@@ -373,7 +373,7 @@ class Trainer:
         """
         # Handle objects with .to() method (e.g., PackedBatch)
         if hasattr(batch, 'to') and callable(getattr(batch, 'to')):
-            return batch.to(self.state.device)
+            return batch.to(self.state.device, non_blocking=True)
         elif isinstance(batch, dict):
             return {k: self._to_device(v) for k, v in batch.items()}
         elif isinstance(batch, (list, tuple)):
@@ -382,7 +382,7 @@ class Trainer:
                 return batch  # Leave as-is for NER / multi-task records
             return type(batch)(self._to_device(v) for v in batch)
         elif isinstance(batch, Tensor):
-            return batch.to(self.state.device)
+            return batch.to(self.state.device, non_blocking=True)
         return batch
 
     def save_checkpoint(self, path: str) -> None:
