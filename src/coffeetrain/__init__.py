@@ -12,6 +12,9 @@ from coffeetrain.optimizers import (
     create_optimizer_with_param_groups,
 )
 
+from coffeetrain.trainer_v2 import TrainerV2
+from coffeetrain.plugins import * # FIXME explicit callbacks
+
 # Callbacks
 from coffeetrain.callbacks import (
     CometCallback,
