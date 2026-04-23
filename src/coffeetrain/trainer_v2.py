@@ -13,7 +13,6 @@ from enum import Enum
 
 
 from textwrap import dedent # Can use d""" ... """ in py 3.15
-from coffeetrain.events import Event
 from coffeetrain.runtime import RuntimeInterfaceMixin
 from coffeetrain.plugin import Plugin
 
