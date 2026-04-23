@@ -56,3 +56,10 @@ select = ["E9", "F63", "F7", "F82"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.uv.workspace]
+members = [
+    "examples/mnist",
+    "examples/bert-hgnc",
+    ".",
+]

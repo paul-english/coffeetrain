@@ -1,0 +1,15 @@
+[project]
+name = "bert-hgnc"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "coffeetrain",
+    "datasets>=4.8.4",
+    "torch>=2.10.0",
+    "transformers>=5.6.1",
+]
+
+[tool.uv.sources]
+coffeetrain = { workspace = true, editable = true }
