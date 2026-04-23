@@ -5,6 +5,7 @@ from coffeetrain.plugins.cuda_accelerate import cuda_accelerate
 from coffeetrain.plugins.torch_compile import torch_compile
 from coffeetrain.plugins.comet import comet_plugin
 from coffeetrain.plugins.lr_monitor import lr_monitor_plugin
+from coffeetrain.plugins.parameter_counter import parameter_counter_plugin
 
 default_plugins = [
     train_plugin,
