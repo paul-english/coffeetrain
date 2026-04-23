@@ -3,6 +3,7 @@ from coffeetrain.plugins.tqdm_progress import tqdm_progress
 from coffeetrain.plugins.early_stopping import early_stopping
 from coffeetrain.plugins.cuda_accelerate import cuda_accelerate
 from coffeetrain.plugins.torch_compile import torch_compile
+from coffeetrain.plugins.comet import comet_plugin
 
 default_plugins = [
     train_plugin,
