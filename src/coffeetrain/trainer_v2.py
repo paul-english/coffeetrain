@@ -67,10 +67,6 @@ class ColoredExtraFormatter(logging.Formatter):
         return formatter.format(record)
 
 
-# TODO NEW you can make a NSight type plugin that automatically
-# gives you an nsight profile annotations
-# TODO Likewise you can make a memory profiling plugin
-
 class TrainerV2(RuntimeInterfaceMixin):
     """
     This iterations jumps up a step beyond callback driven composable training
@@ -121,12 +117,6 @@ class TrainerV2(RuntimeInterfaceMixin):
         the events from our default plugin set exist in your trainer
         instance. If you want to implement your own custom training
         loop, it's best practice to match our event names.
-
-        # TODO a batteries included loop: tries to work for most model families and lets you just throw pure nn.Modules at it
-        # TODO a noop loop
-
-        # TODO keep a log of events and state changes that we can save to disk or put in traces or whatever
-        # allows debugging
         """
         handler = logging.StreamHandler()
         handler.setFormatter(ColoredExtraFormatter())
