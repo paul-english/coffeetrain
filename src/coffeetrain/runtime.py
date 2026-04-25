@@ -131,16 +131,16 @@ class RuntimeInterfaceMixin:
             return call_execution_block()
         return ExecutionBlock(event, self.run_event, override=override)
 
-    def override_block(self):
+    def override_block(self, event):
         """
         Allows a different plugin to register to override the
         entire execution of another's block.
         """
-        def decorator(func, event):
+        def decorator(func):
             if event in self.registered_overrides:
                 raise Exception('Only one plugin may override another block at a time.')
             self.registered_overrides[event] = func
-            return OverrideBlock()
+            return func
 
         return decorator
 

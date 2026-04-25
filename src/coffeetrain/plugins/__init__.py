@@ -7,6 +7,11 @@ from coffeetrain.plugins.torch_compile import torch_compile
 from coffeetrain.plugins.comet import comet_plugin
 from coffeetrain.plugins.lr_monitor import lr_monitor_plugin
 from coffeetrain.plugins.parameter_counter import parameter_counter_plugin
+from coffeetrain.plugins.ema import ema_plugin
+from coffeetrain.plugins.swa import swa_plugin
+from coffeetrain.plugins.gradient_accumulator import gradient_accumulator
+from coffeetrain.plugins.batch_size_scheduler import batch_size_scheduler
+from coffeetrain.plugins.save_best_model import save_best_model_plugin
 
 default_plugins = [
     train_plugin,
