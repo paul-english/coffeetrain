@@ -1,0 +1,13 @@
+[project]
+name = "mnist"
+version = "0.1.0"
+description = "MNIST training example using coffeetrain TrainerV2"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "coffeetrain",
+    "torchvision",
+]
+
+[tool.uv.sources]
+coffeetrain = { workspace = true, editable = true }
