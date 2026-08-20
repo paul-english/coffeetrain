@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Batch size scheduling plugin for TrainerV2.
+"""Batch size scheduling plugin for Trainer.
 
 This plugin schedules batch size warmup during training, gradually increasing
 the effective batch size from start_batch_size to final_batch_size over
@@ -19,9 +19,9 @@ Two schedule types are available:
 
 Example:
   from coffeetrain.plugins.batch_size_scheduler import batch_size_scheduler
-  from coffeetrain import TrainerV2
+  from coffeetrain import Trainer
 
-  trainer = TrainerV2()
+  trainer = Trainer()
   trainer.register_plugin(batch_size_scheduler)
 
   # Configure via trainer hyperparams or command-line args:

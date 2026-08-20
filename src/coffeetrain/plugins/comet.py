@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Comet.ml plugin for experiment tracking and visualization.
 
-This plugin provides Comet.ml integration for the TrainerV2 event-driven system.
+This plugin provides Comet.ml integration for the Trainer event-driven system.
 
 Features:
   - Metric logging with configurable intervals
@@ -11,9 +11,9 @@ Features:
 
 Usage:
   from coffeetrain.plugins.comet import comet_plugin
-  from coffeetrain import TrainerV2
+  from coffeetrain import Trainer
 
-  trainer = TrainerV2()
+  trainer = Trainer()
   trainer.register_plugin(comet_plugin)
 
   # Configure via trainer hyperparams or command-line args:

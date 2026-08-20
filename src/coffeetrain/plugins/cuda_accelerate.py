@@ -6,7 +6,7 @@ cuda_accelerate = Plugin(
 )
 
 # TODO model hook to move to device?
-@cuda_accelerate.system('FIT_START')
+@cuda_accelerate.system('FIT_BEFORE')
 def initialize_device(device=None):
     return {'device': device}
 

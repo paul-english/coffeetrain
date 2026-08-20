@@ -8,9 +8,9 @@ Features:
 
 Usage:
   from coffeetrain.plugins.tqdm_progress import tqdm_progress
-  from coffeetrain import TrainerV2
+  from coffeetrain import Trainer
 
-  trainer = TrainerV2()
+  trainer = Trainer()
   trainer.register_plugin(tqdm_progress)
 
   # Configure metrics to display (default: loss, lr, step)
@@ -85,8 +85,8 @@ def update_train_progress(
 @tqdm_progress.system('EPOCH_AFTER')
 def close_train_progress_bar(
     train_dataloader,
+    set_state,
     is_main_process: bool = True,
-    set_state=None,
 ):
     """Close the training progress bar at end of epoch."""
     if not is_main_process:
@@ -96,9 +96,7 @@ def close_train_progress_bar(
     if hasattr(train_dataloader, 'close'):
         train_dataloader.close()
 
-    # Reset train_dataloader reference to original dataloader if stored
-    # The next epoch will rewrap it
-    if set_state is not None and hasattr(train_dataloader, 'iterable'):
+    if hasattr(train_dataloader, 'iterable'):
         set_state({'train_dataloader': train_dataloader.iterable})
 
 

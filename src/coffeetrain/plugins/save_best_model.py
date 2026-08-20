@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Save best model plugin for TrainerV2.
+"""Save best model plugin for Trainer.
 
 This plugin saves the model when a monitored validation metric improves.
 
@@ -14,9 +14,9 @@ Features:
 
 Usage:
   from coffeetrain.plugins.save_best_model import save_best_model_plugin
-  from coffeetrain import TrainerV2
+  from coffeetrain import Trainer
 
-  trainer = TrainerV2()
+  trainer = Trainer()
   trainer.register_plugin(save_best_model_plugin)
 
   # Configure via trainer hyperparams or command-line args:
@@ -211,9 +211,9 @@ def save_best_model_epoch_end(
     model,
     epoch: int,
     is_main_process: bool,
-    train_metrics: Optional[Dict[str, Any]],
     get_state,
     set_state,
+    train_metrics: Optional[Dict[str, Any]] = None,
 ):
     """Check if current model is best based on train metrics.
 
@@ -279,9 +279,9 @@ def save_best_model_eval_end(
     epoch: int,
     global_step: int,
     is_main_process: bool,
-    eval_metrics: Optional[Dict[str, Any]],
     get_state,
     set_state,
+    eval_metrics: Optional[Dict[str, Any]] = None,
 ):
     """Check if current model is best and save after evaluation.
 

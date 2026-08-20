@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Parameter counting plugin for TrainerV2.
+"""Parameter counting plugin for Trainer.
 
 This plugin displays model architecture and parameter counts at training start.
 
@@ -10,9 +10,9 @@ Features:
 
 Usage:
   from coffeetrain.plugins.parameter_counter import parameter_counter_plugin
-  from coffeetrain import TrainerV2
+  from coffeetrain import Trainer
 
-  trainer = TrainerV2()
+  trainer = Trainer()
   trainer.register_plugin(parameter_counter_plugin)
 """
 

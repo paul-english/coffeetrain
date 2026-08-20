@@ -5,9 +5,9 @@ from torch.utils.data import DataLoader
 import torchvision
 import torchvision.transforms as transforms
 
-from coffeetrain import TrainerV2
+from coffeetrain import Trainer
 
-trainer = TrainerV2()
+trainer = Trainer()
 
 
 class MnistCNN(nn.Module):

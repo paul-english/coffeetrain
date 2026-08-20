@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Weights & Biases plugin for experiment tracking and visualization.
 
-This plugin provides comprehensive W&B integration for the TrainerV2 event-driven system.
+This plugin provides comprehensive W&B integration for the Trainer event-driven system.
 
 Features:
   - Metric logging with configurable intervals
@@ -15,9 +15,9 @@ Features:
 
 Usage:
   from coffeetrain.plugins.wandb import wandb_plugin
-  from coffeetrain import TrainerV2
+  from coffeetrain import Trainer
 
-  trainer = TrainerV2()
+  trainer = Trainer()
   trainer.register_plugin(wandb_plugin)
 
   # Configure via trainer hyperparams or command-line args:
