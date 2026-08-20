@@ -238,6 +238,10 @@ trainer.register_plugin(my_plugin)
 
 Plugin parameter defaults (e.g. `lr=1e-4` on a system or command) are collected as hyperparameters and can be overridden at the CLI.
 
+## Agent Skill
+
+An [agent skill](skill/coffeetrain/SKILL.md) lives in [`skill/coffeetrain/`](skill/coffeetrain/). It teaches AI coding agents how to use coffeetrain — writing training scripts, wiring systems to events, registering plugins, and building custom plugins. To install it for your agent, copy or link the `skill/coffeetrain/` directory into your agent's skills directory (e.g. `~/.agents/skills/`).
+
 ## Installation
 
 ```bash
