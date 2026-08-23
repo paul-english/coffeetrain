@@ -12,6 +12,7 @@ from coffeetrain.plugins.swa import swa_plugin
 from coffeetrain.plugins.gradient_accumulator import gradient_accumulator
 from coffeetrain.plugins.batch_size_scheduler import batch_size_scheduler
 from coffeetrain.plugins.save_best_model import save_best_model_plugin
+from coffeetrain.plugins.wandb import wandb_plugin
 
 default_plugins = [
     train_plugin,

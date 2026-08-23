@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exponential Moving Average plugin for TrainerV2.
+"""Exponential Moving Average plugin for Trainer.
 
 Maintains an EMA copy of the model weights, updated at configurable batch intervals.
 Can optionally swap to EMA model for evaluation.
@@ -8,9 +8,9 @@ EMA formula: ema = decay * ema + (1 - decay) * model
 
 Usage:
   from coffeetrain.plugins.ema import ema_plugin
-  from coffeetrain import TrainerV2
+  from coffeetrain import Trainer
 
-  trainer = TrainerV2()
+  trainer = Trainer()
   trainer.register_plugin(ema_plugin)
 
   # Configure via trainer hyperparams:
@@ -36,7 +36,7 @@ ema_plugin = Plugin(
 
 
 @ema_plugin.system('FIT_BEFORE')
-def init_ema_model(model, device, ema_decay: float = 0.999, ema_update_interval: int = 1, ema_use_for_eval: bool = True, set_state=None):
+def init_ema_model(model, device, ema_decay: float = 0.999, ema_update_interval: int = 1, ema_use_for_eval: bool = True):
     """Create EMA model copy and initialize state.
 
     Args:
@@ -45,7 +45,6 @@ def init_ema_model(model, device, ema_decay: float = 0.999, ema_update_interval:
         ema_decay: EMA decay rate (higher = slower updates)
         ema_update_interval: Update EMA every N batches
         ema_use_for_eval: Use EMA model for validation
-        set_state: Function to set plugin state
     """
     # Create EMA model copy
     ema_model = deepcopy(model)

@@ -9,9 +9,9 @@ Features:
 
 Usage:
   from coffeetrain.plugins.text_progress import text_progress
-  from coffeetrain import TrainerV2
+  from coffeetrain import Trainer
 
-  trainer = TrainerV2()
+  trainer = Trainer()
   trainer.register_plugin(text_progress)
 
   # Configure:

@@ -1,89 +1,246 @@
 # coffeetrain
 
-Lightweight event-driven PyTorch trainer with composable callbacks. Inspired by [MosaicML Composer](https://github.com/mosaicml/composer) but implemented fewer external dependencies and allowing a newer PyTorch version (2.10 as of this point).
+Lightweight event-driven PyTorch training runtime with composable plugins. Inspired by [MosaicML Composer](https://github.com/mosaicml/composer), but with fewer external dependencies and support for recent PyTorch versions.
 
 ## Features
 
-- **Event-driven lifecycle**: `fit_start`, `epoch_start`, `batch_start`, `before_forward`, `after_forward`, `before_loss`, `after_loss`, `before_backward`, `after_backward`, `batch_end`, `eval_*`, etc.
-- **Composable callbacks**: EMA, SWA, checkpointing, W&B, Comet, early stopping, batch size scheduling, and more.
-- **TrainerModel protocol**: Simple interface (`forward`, `loss`) for model integration.
-- **Accelerate support**: Distributed training via HuggingFace Accelerator.
+- **Plugin-based composition**: bundle events, systems, and commands into reusable plugins
+- **Decorator-driven wiring**: hook training logic with `@trainer.system('EVENT')`
+- **Shared context state**: systems receive kwargs from context and return dict updates
+- **CLI commands**: function parameter defaults become hyperparameters for `python train.py train --lr 1e-4`
+- **Interruptible default loop**: graceful SIGINT/SIGTERM handling built into the core `train` plugin
+- **Optional batteries**: W&B, Comet, EMA, SWA, checkpointing, LR monitoring, and more
+
+## Quick Start
+
+```python
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
+import torchvision
+import torchvision.transforms as transforms
+
+from coffeetrain import Trainer
+
+trainer = Trainer()
+
+
+class MnistCNN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(1, 32, 3), nn.ReLU(), nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, 3), nn.ReLU(), nn.MaxPool2d(2),
+            nn.Flatten(),
+            nn.Linear(1600, 128), nn.ReLU(),
+            nn.Linear(128, 10),
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
+@trainer.system('DATA_BEFORE')
+def load_data():
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,)),
+    ])
+    train_ds = torchvision.datasets.MNIST(root='./data', train=True, download=True, transform=transform)
+    test_ds = torchvision.datasets.MNIST(root='./data', train=False, download=True, transform=transform)
+    return {
+        'train_dataloader': DataLoader(train_ds, batch_size=64, shuffle=True),
+        'eval_dataloader': DataLoader(test_ds, batch_size=256, shuffle=False),
+        'loss_fn': nn.CrossEntropyLoss(),
+    }
+
+
+@trainer.system('MODEL_BEFORE')
+def create_model():
+    compute_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    return {'model': MnistCNN().to(compute_device), 'device': None, 'compute_device': compute_device}
+
+
+@trainer.system('OPTIMIZER_BEFORE')
+def create_optimizer(model, lr=5e-4):
+    return {'optimizer': torch.optim.Adam(model.parameters(), lr=lr), 'lr': lr}
+
+
+@trainer.system('FORWARD_BEFORE')
+def prepare_forward_batch(batch, compute_device):
+    inputs, labels = batch
+    return {'inputs': inputs.to(compute_device), 'labels': labels.to(compute_device)}
+
+
+@trainer.system('FORWARD')
+def forward_pass(model, inputs):
+    return {'outputs': model(inputs)}
+
+
+@trainer.system('BACKWARD_AFTER')
+def optimizer_step(optimizer):
+    optimizer.step()
+    optimizer.zero_grad()
+
+
+if __name__ == '__main__':
+    trainer()
+```
+
+Run training:
+
+```bash
+python train.py train --max_epochs 10 --lr 5e-4
+```
+
+See [`examples/mnist/main.py`](examples/mnist/main.py) for a complete working example.
+
+## Core Concepts
+
+### Plugin
+
+A plugin bundles related events, systems, and commands. The trainer auto-registers a default plugin set on construction; optional plugins are added with `trainer.register_plugin(...)`.
+
+### System
+
+A system is a function registered on one or more events. Its parameters are filled from shared context and hyperparameter defaults. Return a `dict` to update context:
+
+```python
+@trainer.system('BATCH_AFTER')
+def log_loss(loss, log):
+    log.info(f"loss={loss.item():.4f}")
+```
+
+### Command
+
+Commands are top-level entry points dispatched from the CLI. The default `train` command runs the standard training loop:
+
+```bash
+python train.py train --max_epochs 20
+```
+
+### State
+
+Training state lives in a shared `context` dict on the trainer. Systems can also use injected helpers: `get_state`, `set_state`, `run_event`, and `execution_block`.
+
+| Key | Description |
+|-----|-------------|
+| `model` | `nn.Module` being trained |
+| `optimizer` | PyTorch optimizer |
+| `train_dataloader` | Training `DataLoader` |
+| `eval_dataloader` | Optional validation `DataLoader` |
+| `batch` | Current batch from the dataloader |
+| `outputs` | Model outputs from the current forward pass |
+| `loss` | Current scalar loss tensor |
+| `epoch` | Current epoch (0-indexed) |
+| `batch_idx` | Batch index within the epoch |
+| `global_step` | Total training batches processed |
+| `eval_loss` | Mean validation loss after an eval pass |
+| `stop_training` | Set `True` to stop after the current batch |
+| `interrupted` | Set when SIGINT/SIGTERM is received |
 
 ## Event Lifecycle
 
-The trainer fires events at fixed points in the training loop. Callbacks implement matching methods to hook into any stage.
+The default `train` plugin defines a block-oriented event model. Each block fires `{EVENT}_BEFORE`, `{EVENT}`, and `{EVENT}_AFTER` hooks.
 
 ```mermaid
 flowchart LR
-    INIT["INIT"] --> FIT_START["FIT_START"] --> EPOCH_START["EPOCH_START"]
-
-    EPOCH_START --> BS["BATCH_START"]
-    subgraph batch [" training batch "]
-        direction TB
-        BS --> BF["BEFORE_FORWARD"] --> AF["AFTER_FORWARD"]
-        AF --> BL["BEFORE_LOSS"] --> AL["AFTER_LOSS"]
-        AL --> BB["BEFORE_BACKWARD"] --> AB["AFTER_BACKWARD"]
-        AB --> BE["BATCH_END"]
+    subgraph setup [Setup blocks]
+        DATA["DATA"]
+        MODEL["MODEL"]
+        OPT["OPTIMIZER"]
     end
-    BE --> MORE{more batches?}
-    MORE -- yes --> BS
-    MORE -- no --> EPOCH_END["EPOCH_END"]
-
-    EPOCH_END --> EVAL_CHECK{eval?}
-    EVAL_CHECK -- yes --> ES["EVAL_START"]
-    subgraph eval [" evaluation "]
-        direction TB
-        ES --> EBS["EVAL_BATCH_START"] --> EBF["EVAL_BEFORE_FORWARD"]
-        EBF --> EAF["EVAL_AFTER_FORWARD"] --> EBE["EVAL_BATCH_END"]
-        EBE --> EMORE{more?}
-        EMORE -- yes --> EBS
-    end
-    EMORE -- no --> EE["EVAL_END"]
-    EE --> NEXT{next epoch?}
-    EVAL_CHECK -- no --> NEXT
-    NEXT -- yes --> EPOCH_START
-    NEXT -- no --> FIT_END["FIT_END"]
-
-    MORE -. "SIGINT / SIGTERM" .-> INT["TRAINING_INTERRUPTED"] --> FIT_END
-
-    style INIT fill:#4a9eff,color:#fff
-    style FIT_START fill:#4a9eff,color:#fff
-    style FIT_END fill:#4a9eff,color:#fff
-    style INT fill:#e74c3c,color:#fff
-    style EPOCH_START fill:#2ecc71,color:#fff
-    style EPOCH_END fill:#2ecc71,color:#fff
-    style ES fill:#f39c12,color:#fff
-    style EE fill:#f39c12,color:#fff
-    style batch fill:#e8f0fe,stroke:#6c8ebf
-    style eval fill:#fef5e7,stroke:#f39c12
+    setup --> FIT["FIT"]
+    FIT --> EPOCH["EPOCH"]
+    EPOCH --> BATCH["BATCH"]
+    BATCH --> FWD["FORWARD"]
+    FWD --> LOSS["LOSS"]
+    LOSS --> BWD["BACKWARD"]
+    EPOCH --> EVAL["EVAL"]
+    EVAL --> EVALBATCH["EVAL_BATCH"]
+    EVALBATCH --> EVALFWD["EVAL_FORWARD"]
+    EVALFWD --> EVALLOSS["EVAL_LOSS"]
 ```
-
-Each event is dispatched via `_run_event()`, which calls the matching method on every registered callback with the shared `State` object. Callbacks can read or mutate state (e.g. `state.stop_training = True`).
-
-### Events
 
 | Event | Phase | Description |
 |-------|-------|-------------|
-| `init` | Setup | After `Trainer()` construction, before `fit()` |
-| `fit_start` | Fit | Start of `fit()`, before any training |
-| `fit_end` | Fit | End of `fit()`, after all training |
-| `training_interrupted` | Fit | SIGINT/SIGTERM received (fires before `fit_end`) |
-| `epoch_start` | Epoch | Start of each epoch |
-| `epoch_end` | Epoch | End of each epoch, before evaluation |
-| `batch_start` | Batch | Start of each training batch |
-| `before_forward` | Batch | Before `model.forward()` |
-| `after_forward` | Batch | After `model.forward()`; `state.outputs` now set |
-| `before_loss` | Batch | Before `model.loss()` |
-| `after_loss` | Batch | After `model.loss()`; `state.loss` now set |
-| `before_backward` | Batch | Before `loss.backward()` |
-| `after_backward` | Batch | After `loss.backward()`, before optimizer step |
-| `batch_end` | Batch | After optimizer + scheduler step |
-| `eval_start` | Eval | Start of evaluation pass |
-| `eval_batch_start` | Eval | Start of each eval batch |
-| `eval_before_forward` | Eval | Before `model.forward()` during eval |
-| `eval_after_forward` | Eval | After `model.forward()` during eval |
-| `eval_batch_end` | Eval | End of each eval batch |
-| `eval_end` | Eval | End of evaluation pass |
+| `DATA` | Setup | Load datasets and loss function |
+| `MODEL` | Setup | Build and place model on device |
+| `OPTIMIZER` | Setup | Create optimizer(s) |
+| `FIT` | Training | Start/end of full training run |
+| `TRAINING_INTERRUPTED` | Training | Fired on graceful interrupt |
+| `EPOCH` | Epoch | One training epoch |
+| `BATCH` | Batch | One training batch |
+| `FORWARD` | Batch | Model forward pass |
+| `LOSS` | Batch | Loss computation |
+| `BACKWARD` | Batch | `loss.backward()` |
+| `EVAL` | Eval | Full validation pass |
+| `EVAL_BATCH` | Eval | One validation batch |
+| `EVAL_FORWARD` | Eval | Forward pass during eval |
+| `EVAL_LOSS` | Eval | Loss computation during eval |
+
+## Plugins
+
+### Default (bundled)
+
+Registered automatically when you create a `Trainer()`.
+
+| Plugin | Description |
+|--------|-------------|
+| `train_plugin` | Interruptible training loop and `train` command |
+| `tqdm_progress` | tqdm progress bars for train/eval |
+| `cuda_accelerate` | Move batches to CUDA when a device is set |
+| `torch_compile` | Optional `torch.compile` on the model |
+| `early_stopping` | WIP — not yet functional |
+
+### Optional
+
+Register these when you need them:
+
+```python
+from coffeetrain import Trainer, ema_plugin, save_best_model_plugin, wandb_plugin
+
+trainer = Trainer()
+trainer.register_plugin([ema_plugin, save_best_model_plugin, wandb_plugin])
+```
+
+| Plugin | Description |
+|--------|-------------|
+| `wandb_plugin` | Weights & Biases logging |
+| `comet_plugin` | Comet.ml logging |
+| `ema_plugin` | Exponential moving average of weights |
+| `swa_plugin` | Stochastic weight averaging |
+| `save_best_model_plugin` | Save checkpoint when a metric improves |
+| `lr_monitor_plugin` | Log learning rates |
+| `parameter_counter_plugin` | Print parameter counts at fit start |
+| `batch_size_scheduler` | Gradual batch size warmup |
+| `gradient_accumulator` | Gradient accumulation via `override_block` |
+| `text_progress` | Plain-text epoch summaries (alternative to tqdm) |
+
+## Writing a Custom Plugin
+
+```python
+from coffeetrain import Plugin, Trainer
+
+my_plugin = Plugin(name="my_plugin", description="Example plugin")
+
+@my_plugin.system('FIT_BEFORE')
+def on_fit_start(log):
+    log.info("Starting training")
+
+@my_plugin.system('BATCH_AFTER')
+def track_step(global_step):
+    return {'my_step': global_step}
+
+trainer = Trainer()
+trainer.register_plugin(my_plugin)
+```
+
+Plugin parameter defaults (e.g. `lr=1e-4` on a system or command) are collected as hyperparameters and can be overridden at the CLI.
+
+## Agent Skill
+
+An [agent skill](skill/coffeetrain/SKILL.md) lives in [`skill/coffeetrain/`](skill/coffeetrain/). It teaches AI coding agents how to use coffeetrain — writing training scripts, wiring systems to events, registering plugins, and building custom plugins. To install it for your agent, copy or link the `skill/coffeetrain/` directory into your agent's skills directory (e.g. `~/.agents/skills/`).
 
 ## Installation
 
@@ -92,139 +249,24 @@ pip install coffeetrain
 ```
 
 Optional extras:
+
 ```bash
 pip install coffeetrain[wandb,comet,optimi]
 ```
 
-## Quick Start
+## Examples
 
-```python
-from coffeetrain import Trainer, CosineWarmupScheduler, HistoryCallback, BestModelCheckpointer
-from coffeetrain import create_optimizer
-from coffeetrain.optimizers import OptimizerConfig
+- [`examples/mnist`](examples/mnist) — MNIST CNN with the default training loop
+- [`examples/bert-hgnc`](examples/bert-hgnc) — BERT / ModernBERT masked LM on HGNC gene data
 
-model = MyModel()
-optimizer = create_optimizer(model.parameters(), OptimizerConfig(name="adamw", lr=1e-4, weight_decay=0.01))
-scheduler = CosineWarmupScheduler(optimizer, warmup_steps=100, total_steps=1000)
+## Tests
 
-trainer = Trainer(
-    model=model,
-    train_dataloader=train_loader,
-    optimizers=optimizer,
-    schedulers=scheduler,
-    max_epochs=10,
-    callbacks=[
-        HistoryCallback(save_dir="output"),
-        BestModelCheckpointer(save_dir="output", metric_name="loss", mode="min"),
-    ],
-)
-trainer.fit()
+From the repository root:
+
+```bash
+uv run pytest tests -q
 ```
-
-## Callbacks
-
-| Callback | Description |
-|----------|-------------|
-| `BestModelCheckpointer` | Save best model by metric |
-| `HistoryCallback` | Track and save training history to JSON |
-| `EMACallback` | Exponential moving average of weights |
-| `SWACallback` | Stochastic weight averaging |
-| `EarlyStoppingCallback` | Stop when metric stops improving |
-| `WandbCallback` | Log to Weights & Biases |
-| `CometCallback` | Log to Comet.ml |
-| `BatchSizeSchedulerCallback` | Batch size warmup |
-| `ScheduleLoggerCallback` | Log LR schedule phase transitions |
-| `ParameterCounter` | Print parameter counts at start |
-| `SpeedMonitor` | Track samples/sec |
-| `ProgressCallback` | Print epoch summaries |
-| `LRMonitor` | Log learning rates |
-| `TorchMetricsCallback` | Integrate torchmetrics |
-
-## Custom Callbacks
-
-Subclass `Callback` and override only the event methods you need — everything else is a no-op by default. Each method receives the shared `State` object, which carries the model, optimizers, current batch, loss, metrics, and progress counters. Callbacks can freely read state and mutate it (e.g. set `state.stop_training = True`).
-
-A few things to keep in mind:
-
-- **`state.callback_state`** is a shared dict where callbacks can store arbitrary data without colliding with core fields. Namespace your keys (e.g. `state.callback_state["my_callback.counter"]`).
-- **`state_dict` / `load_state_dict`** — override these if your callback carries state that should survive checkpointing and resume.
-- **Ordering matters** — callbacks run in the order they appear in the `callbacks` list. If one callback depends on values set by another, place it later in the list.
-
-### Starter Template
-
-Copy this and delete the methods you don't need:
-
-```python
-from coffeetrain.callback import Callback
-from coffeetrain.state import State
-
-
-class MyCallback(Callback):
-
-    # ── Initialization ────────────────────────────────────────────
-    def init(self, state: State) -> None: ...
-    def fit_start(self, state: State) -> None: ...
-    def fit_end(self, state: State) -> None: ...
-
-    # ── Epoch ─────────────────────────────────────────────────────
-    def epoch_start(self, state: State) -> None: ...
-    def epoch_end(self, state: State) -> None: ...
-
-    # ── Training batch ────────────────────────────────────────────
-    def batch_start(self, state: State) -> None: ...
-    def before_forward(self, state: State) -> None: ...
-    def after_forward(self, state: State) -> None: ...
-    def before_loss(self, state: State) -> None: ...
-    def after_loss(self, state: State) -> None: ...
-    def before_backward(self, state: State) -> None: ...
-    def after_backward(self, state: State) -> None: ...
-    def batch_end(self, state: State) -> None: ...
-
-    # ── Evaluation ────────────────────────────────────────────────
-    def eval_start(self, state: State) -> None: ...
-    def eval_batch_start(self, state: State) -> None: ...
-    def eval_before_forward(self, state: State) -> None: ...
-    def eval_after_forward(self, state: State) -> None: ...
-    def eval_batch_end(self, state: State) -> None: ...
-    def eval_end(self, state: State) -> None: ...
-
-    # ── Checkpointing ─────────────────────────────────────────────
-    def state_dict(self) -> dict: ...
-    def load_state_dict(self, state_dict: dict) -> None: ...
-```
-
-### `State` Quick Reference
-
-| Field | Type | Available from | Description |
-|-------|------|----------------|-------------|
-| `model` | `nn.Module` | `init` | The model being trained |
-| `optimizers` | `list[Optimizer]` | `fit_start` | All optimizers |
-| `schedulers` | `list[LRScheduler]` | `fit_start` | All LR schedulers |
-| `train_dataloader` | `DataLoader` | `fit_start` | Training data |
-| `eval_dataloader` | `DataLoader \| None` | `fit_start` | Validation data |
-| `batch` | `Any` | `batch_start` | Current batch from the dataloader |
-| `outputs` | `Any` | `after_forward` | Return value of `model.forward()` |
-| `loss` | `Tensor \| None` | `after_loss` | Current loss value |
-| `epoch` | `int` | `epoch_start` | Current epoch (0-indexed) |
-| `batch_idx` | `int` | `batch_start` | Batch index within the epoch |
-| `global_step` | `int` | `batch_start` | Total batches processed so far |
-| `max_epochs` | `int` | `init` | Configured epoch limit |
-| `grad_accum` | `int` | `init` | Gradient accumulation steps (mutable) |
-| `stop_training` | `bool` | any | Set `True` to stop after current batch |
-| `train_metrics` | `dict[str, float]` | any | Accumulated training metrics |
-| `eval_metrics` | `dict[str, float]` | `eval_end` | Accumulated evaluation metrics |
-| `device` | `torch.device` | `init` | Training device |
-| `is_main_process` | `bool` | `init` | `True` on rank 0 / single-process |
-| `callback_state` | `dict[str, Any]` | any | Shared scratch space for callbacks |
 
 ## License
 
 Apache-2.0
-
-## Tests
-
-From repository root:
-
-```bash
-uv run pytest packages/coffeetrain/tests -q
-```

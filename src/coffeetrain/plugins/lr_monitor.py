@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Learning rate monitoring plugin for TrainerV2.
+"""Learning rate monitoring plugin for Trainer.
 
 This plugin monitors and logs learning rates during training.
 
@@ -10,9 +10,9 @@ Features:
 
 Usage:
   from coffeetrain.plugins.lr_monitor import lr_monitor_plugin
-  from coffeetrain import TrainerV2
+  from coffeetrain import Trainer
 
-  trainer = TrainerV2()
+  trainer = Trainer()
   trainer.register_plugin(lr_monitor_plugin)
 
   # Configure via trainer hyperparams or command-line args:

@@ -4,7 +4,7 @@ from enum import Enum
 import torch
 import torch.nn as nn
 from datasets import load_dataset
-from coffeetrain import TrainerV2
+from coffeetrain import Trainer
 from typer import Typer
 from torch.optim import Muon
 from torch.utils.data import DataLoader
@@ -12,7 +12,7 @@ from transformers import AutoTokenizer, DataCollatorWithPadding
 
 from models import BERT, ModernBERT
 
-trainer = TrainerV2()
+trainer = Trainer()
 
 ModelSize = Literal['nano', 'base']
 

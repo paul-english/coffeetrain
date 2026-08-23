@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stochastic Weight Averaging plugin for TrainerV2.
+"""Stochastic Weight Averaging plugin for Trainer.
 
 Maintains an SWA copy of the model weights by averaging model snapshots
 taken at regular intervals during the later stages of training.
@@ -12,9 +12,9 @@ of training) and averages snapshots from this phase to find flatter minima.
 
 Usage:
   from coffeetrain.plugins.swa import swa_plugin
-  from coffeetrain import TrainerV2
+  from coffeetrain import Trainer
 
-  trainer = TrainerV2()
+  trainer = Trainer()
   trainer.register_plugin(swa_plugin)
 
   # Configure via trainer hyperparams:

@@ -16,9 +16,9 @@ from textwrap import dedent # Can use d""" ... """ in py 3.15
 from coffeetrain.runtime import RuntimeInterfaceMixin
 from coffeetrain.plugin import Plugin
 
-__ALL__ = ['TrainerV2']
+__all__ = ['Trainer']
 
-log = logging.getLogger('TrainerV2')
+log = logging.getLogger('Trainer')
 
 class PluginMergeConflict(Exception):
     ...
@@ -66,7 +66,7 @@ class ColoredExtraFormatter(logging.Formatter):
         return formatter.format(record)
 
 
-class TrainerV2(RuntimeInterfaceMixin):
+class Trainer(RuntimeInterfaceMixin):
     """
     This iterations jumps up a step beyond callback driven composable training
     into more of a full runtime with an ECS style for composable training.
@@ -78,8 +78,8 @@ class TrainerV2(RuntimeInterfaceMixin):
     # executing systems
 
     ```
-    from coffeetrain import TrainerV2
-    trainer = TrainerV2()
+    from coffeetrain import Trainer
+    trainer = Trainer()
 
     @trainer.component
     def train_dataset():
@@ -275,13 +275,13 @@ class TrainerV2(RuntimeInterfaceMixin):
 
     def _collect_kwargs_from_ctx(self, func, params):
         local_context = {
+            **self.hyperparams,
+            **self.context,
             'log': self.log.getChild(func.__name__),
             'run_event': self.run_event,
             'get_state': self.get_state,
             'set_state': self.set_state,
             'execution_block': self.execution_block,
-            **self.hyperparams,
-            **self.context,
         }
         hints = get_type_hints(func)
         # Basic type casting logic
@@ -375,12 +375,15 @@ def custom_coerce(value, annotation):
             f"{value!r} is not one of {allowed!r}"
         )
 
+    if origin is dict:
+        return value
+
     if origin is Union:
         non_none = [a for a in get_args(annotation) if a is not type(None)]
         if len(non_none) == 1:
             if value is None:
                 return None
-            return coerce(value, non_none[0])
+            return custom_coerce(value, non_none[0])
 
     # list[X]  -- expects value to already be a list of raw strings
     if origin in (list,):
