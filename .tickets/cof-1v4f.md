@@ -1,6 +1,6 @@
 ---
 id: cof-1v4f
-status: closed
+status: open
 deps: []
 links: []
 created: 2026-09-03T17:50:36Z
@@ -24,3 +24,7 @@ Implemented v0.2.1 fixes: typed CLI overrides, state/coercion bugs, safe block o
 **2026-09-03T18:44:44Z**
 
 Final validation passed: 14 tests, full Ruff, compileall, uv lock --check, uv build, and twine check for both 0.2.1 distributions. Changes staged for local commit only; no push or tag.
+
+**2026-09-03T18:48:54Z**
+
+Added required transcript summary at docs/transcript-summaries/2026-09-03-v0-2-1-bug-fix-release-and-deployment.md before deployment.
