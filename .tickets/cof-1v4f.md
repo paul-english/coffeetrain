@@ -1,6 +1,6 @@
 ---
 id: cof-1v4f
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-09-03T17:50:36Z
