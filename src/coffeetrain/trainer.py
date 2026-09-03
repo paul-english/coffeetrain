@@ -5,9 +5,9 @@ import functools
 import sys
 import inspect
 import logging
-import signal
 from datetime import datetime
-from typing import List, Union, get_type_hints, get_origin, get_args, Literal
+from typing import Any, List, Union, get_type_hints, get_origin, get_args, Literal
+from types import UnionType
 from pathlib import Path
 from enum import Enum
 
@@ -49,17 +49,17 @@ class ColoredExtraFormatter(logging.Formatter):
         # 1. Identify and format the 'extra' dict
         extra_data = {
             k: v for k, v in record.__dict__.items()
-            if k not in self.STANDARD_ATTRS
+            if k not in self.STANDARD_ATTRS and k != 'extra_str'
         }
 
         # We'll make the extra dictionary bright Green for visibility
         red = self.RED
         green = "\x1b[32;20m"
-        record.extra_str = '' if not extra_data else f" {red}extra={green}{str(extra_data)}{self.RESET}" if extra_data else "{}"
+        extra_str = '' if not extra_data else f" {red}extra={green}{str(extra_data)}{self.RESET}"
 
         # 2. Apply color to the main log level
-        log_fmt = self.COLORS.get(record.levelno)
-        format_str = f"{log_fmt}%(levelname)s{self.RESET} - %(message)s%(extra_str)s"
+        log_fmt = self.COLORS.get(record.levelno, self.RESET)
+        format_str = f"{log_fmt}%(levelname)s{self.RESET} - %(message)s{extra_str}"
 
         # 3. Create a temporary formatter to handle the actual string interpolation
         formatter = logging.Formatter(format_str)
@@ -117,11 +117,13 @@ class Trainer(RuntimeInterfaceMixin):
         instance. If you want to implement your own custom training
         loop, it's best practice to match our event names.
         """
-        handler = logging.StreamHandler()
-        handler.setFormatter(ColoredExtraFormatter())
         self.log = log
         self.log.propagate = False
-        self.log.addHandler(handler)
+        if not any(getattr(h, '_coffeetrain_handler', False) for h in self.log.handlers):
+            handler = logging.StreamHandler()
+            handler._coffeetrain_handler = True
+            handler.setFormatter(ColoredExtraFormatter())
+            self.log.addHandler(handler)
         self.log.setLevel(
             os.environ.get('LOGLEVEL', 'INFO').upper()
         )
@@ -173,37 +175,97 @@ class Trainer(RuntimeInterfaceMixin):
         ]
         commands = "\n".join(commands)
 
-        # TODO generates ARGS
+        flags = "\n".join(
+            f'  --{name} (default: {default!r})'
+            for name, default in sorted(self.hyperparams.items())
+        )
 
         print(dedent(f"""
         Usage: python {{script.py}} [COMMAND] [ARGS]
 
         Commands:
         {commands}
+
+        Hyperparameters (override with `--name value` or `--name=value`):
+        {flags}
         """))
 
     async def dispatch(self):
-        self.log.debug(f'Dispatch start', extra={'argv': sys.argv})
+        self.log.debug('Dispatch start', extra={'argv': sys.argv})
         if len(sys.argv) < 2:
             await self.display_help()
             sys.exit(1)
 
         cmd_name = sys.argv[1]
-        if len(sys.argv) < 3:
-            # no args
-            args = []
-        else:
-            args = sys.argv[2]
+        raw_args = sys.argv[2:]
 
         if cmd_name in self.registered_commands:
             cmd_info = self.registered_commands[cmd_name]
             func = cmd_info["func"]
             params = cmd_info["sigs"]
+            cli_overrides = self._parse_cli_overrides(raw_args, func)
+            if cli_overrides:
+                self.set_state(cli_overrides)
             parsed_args = self._collect_kwargs_from_ctx(func, params)
             self.log.debug(f'Dispatching command: `{cmd_name}`', extra={'parsed_args': parsed_args})
             return await self._execute(func, **parsed_args)
         else:
             print(f"Unknown command: {cmd_name}")
+
+    def _parse_cli_overrides(self, raw_args, func):
+        """Parse `--key value` / `--key=value` CLI args into hyperparameter overrides.
+
+        Values arrive as strings; they are coerced using the command's type
+        annotations when available, falling back to the type of the current
+        hyperparameter default. A bare `--flag` sets boolean True.
+        """
+        try:
+            hints = get_type_hints(func)
+        except (NameError, TypeError):
+            hints = {}
+        # Hyperparameters may be declared on systems rather than this command.
+        for details in self.registered_systems.values():
+            try:
+                hints.update(get_type_hints(details['func']))
+            except (NameError, TypeError):
+                continue
+        overrides = {}
+        i = 0
+        while i < len(raw_args):
+            token = raw_args[i]
+            if not token.startswith('--'):
+                self.log.warning(f"Ignoring unexpected argument: `{token}` (expected `--key value`)")
+                i += 1
+                continue
+            if '=' in token:
+                key, raw_val = token[2:].split('=', 1)
+            else:
+                key = token[2:]
+                if i + 1 < len(raw_args) and not raw_args[i + 1].startswith('--'):
+                    raw_val = raw_args[i + 1]
+                    i += 1
+                else:
+                    raw_val = 'true'
+            if key not in self.hyperparams and key not in hints:
+                self.log.warning(f"Unknown hyperparameter: `--{key}` (ignored)")
+            else:
+                try:
+                    overrides[key] = self._coerce_cli_value(raw_val, key, hints.get(key))
+                except (ValueError, TypeError) as e:
+                    self.log.error(f"Could not parse `--{key} {raw_val}`: {e} (ignored)")
+            i += 1
+        return overrides
+
+    def _coerce_cli_value(self, raw_val, key, annotation):
+        """Coerce a raw CLI string using an annotation, else the default's type."""
+        if annotation is not None:
+            return custom_coerce(raw_val, annotation)
+        default = self.hyperparams.get(key)
+        if isinstance(default, bool):
+            return _coerce_bool(raw_val)
+        if default is not None and not isinstance(default, str):
+            return type(default)(raw_val)
+        return raw_val
 
     def register_plugin(self, plugins: Union[Plugin | List[Plugin]]):
         if isinstance(plugins, Plugin):
@@ -227,7 +289,7 @@ class Trainer(RuntimeInterfaceMixin):
 
         def deepmerge_defaultlists(plugin, merge_name, a, b):
             names = set(a.keys()) | set(b.keys())
-            self.log.debug(f'Merging event index', extra={'event_index': b})
+            self.log.debug('Merging event index', extra={'event_index': b})
             for name in names:
                 a[name] += b[name]
 
@@ -254,20 +316,21 @@ class Trainer(RuntimeInterfaceMixin):
         """
         Allows
         """
-        if 'name' in kwargs and 'value' in kwargs:
-            self.set_state(name, value)
-        elif len(args) == 2:
-            k, v = args
-            self.log.debug(f'Set state: `{k}`')
-            self.context[k] = v
-        elif isinstance(args[0], dict):
-            for k,v in args[0].items():
-                self.set_state(k, v)
-        elif len(kwargs):
-            for k,v in kwargs.items():
-                self.set_state(k, v)
+        if len(args) == 2:
+            if kwargs:
+                raise TypeError('Do not mix positional key/value and keyword state updates.')
+            self.log.debug(f'Set state: `{args[0]}`')
+            self.context[args[0]] = args[1]
+        elif len(args) == 1 and isinstance(args[0], dict):
+            self.context.update(args[0])
+            self.context.update(kwargs)
+        elif not args and kwargs:
+            if set(kwargs) == {'name', 'value'}:
+                self.context[kwargs['name']] = kwargs['value']
+            else:
+                self.context.update(kwargs)
         else:
-            raise Exception(f"Unknown values passed to `set_state`: `{args}` & `{kwargs}`. Either pass a key & value to set_state, or a dictionary of state values to change.")
+            raise TypeError(f"Unknown values passed to `set_state`: `{args}` & `{kwargs}`. Either pass a key & value to set_state, or a dictionary of state values to change.")
         return
 
     def sync_run_event(self, event: str):
@@ -283,10 +346,13 @@ class Trainer(RuntimeInterfaceMixin):
             'set_state': self.set_state,
             'execution_block': self.execution_block,
         }
-        hints = get_type_hints(func)
+        try:
+            hints = get_type_hints(func)
+        except (NameError, TypeError):
+            hints = {}
         # Basic type casting logic
         parsed_args = {}
-        for i, (name, param) in enumerate(params.items()):
+        for name, param in params.items():
             if name == 'kwargs':
                 parsed_args['kwargs'] = local_context
             elif name == 'args':
@@ -305,6 +371,14 @@ class Trainer(RuntimeInterfaceMixin):
                 self.log.error(f'Argument not found in the context: `{name}`')
         return parsed_args
 
+
+    async def _invoke_override(self, func):
+        """Run an override block with dependencies injected from context."""
+        params = inspect.signature(func).parameters
+        kwargs = self._collect_kwargs_from_ctx(func, params)
+        updated_state = await self._execute(func, **kwargs)
+        if updated_state is not None:
+            self.set_state(updated_state)
 
     async def run_event(self, event: str, before: bool = False, after: bool = False):
         """
@@ -378,7 +452,7 @@ def custom_coerce(value, annotation):
     if origin is dict:
         return value
 
-    if origin is Union:
+    if origin in (Union, UnionType):
         non_none = [a for a in get_args(annotation) if a is not type(None)]
         if len(non_none) == 1:
             if value is None:
@@ -388,7 +462,9 @@ def custom_coerce(value, annotation):
     # list[X]  -- expects value to already be a list of raw strings
     if origin in (list,):
         (inner,) = get_args(annotation)
-        return [coerce(v, inner) for v in value]
+        if isinstance(value, str):
+            value = [item for item in value.split(',') if item]
+        return [custom_coerce(v, inner) for v in value]
 
     # Enums: match by member name
     if isinstance(annotation, type) and issubclass(annotation, Enum):
@@ -398,6 +474,9 @@ def custom_coerce(value, annotation):
             return annotation[value]          # match by name
 
     # Plain registered types
+    if annotation is Any:
+        return value
+
     if annotation in COERCERS:
         return COERCERS[annotation](value)
 

@@ -191,7 +191,7 @@ Registered automatically when you create a `Trainer()`.
 | `tqdm_progress` | tqdm progress bars for train/eval |
 | `cuda_accelerate` | Move batches to CUDA when a device is set |
 | `torch_compile` | Optional `torch.compile` on the model |
-| `early_stopping` | WIP — not yet functional |
+| `early_stopping` | Stop when the monitored metric plateaus |
 
 ### Optional
 
@@ -215,6 +215,7 @@ trainer.register_plugin([ema_plugin, save_best_model_plugin, wandb_plugin])
 | `parameter_counter_plugin` | Print parameter counts at fit start |
 | `batch_size_scheduler` | Gradual batch size warmup |
 | `gradient_accumulator` | Gradient accumulation via `override_block` |
+| `hf_accelerator` | HuggingFace Accelerate integration (install the `accelerate` extra) |
 | `text_progress` | Plain-text epoch summaries (alternative to tqdm) |
 
 ## Writing a Custom Plugin
@@ -251,7 +252,7 @@ pip install coffeetrain
 Optional extras:
 
 ```bash
-pip install coffeetrain[wandb,comet,optimi]
+pip install coffeetrain[accelerate,wandb,comet,optimi]
 ```
 
 ## Examples

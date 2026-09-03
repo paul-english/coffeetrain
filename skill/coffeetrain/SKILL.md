@@ -138,7 +138,7 @@ trainer = Trainer()
 trainer.register_plugin([ema_plugin, save_best_model_plugin, wandb_plugin])
 ```
 
-Available: `wandb_plugin`, `comet_plugin` (experiment tracking), `ema_plugin`, `swa_plugin`
+Available: `wandb_plugin`, `comet_plugin` (experiment tracking), `ema_plugin`, `swa_plugin`, `hf_accelerator` (HuggingFace Accelerate)
 (weight averaging), `save_best_model_plugin` (checkpoint on metric improvement),
 `lr_monitor_plugin`, `parameter_counter_plugin`, `batch_size_scheduler` (batch size
 warmup), `gradient_accumulator`, `text_progress` (plain-text alternative to tqdm).

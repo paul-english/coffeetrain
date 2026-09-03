@@ -1,1 +1,7 @@
 __pycache__/
+*.py[cod]
+.venv/
+dist/
+build/
+.pytest_cache/
+examples/mnist/data/

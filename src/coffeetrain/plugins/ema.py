@@ -23,8 +23,6 @@ Parameters (all optional with sensible defaults):
 """
 
 from copy import deepcopy
-from typing import Optional
-
 import torch
 
 from coffeetrain.plugin import Plugin

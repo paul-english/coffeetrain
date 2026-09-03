@@ -38,7 +38,7 @@ Parameters (all optional with sensible defaults):
   - real_batch_size: Physical batch size per forward pass (default: batch_size)
 """
 
-from typing import Any, Dict, Literal, Optional
+from typing import Literal, Optional
 
 from coffeetrain.plugin import Plugin
 

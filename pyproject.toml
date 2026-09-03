@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "coffeetrain"
-version = "0.2.0"
+version = "0.2.1"
 description = "Lightweight event-driven PyTorch trainer with composable plugins"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -30,6 +30,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+accelerate = ["accelerate>=1.0.0"]
 wandb = ["wandb>=0.18.0"]
 comet = ["comet-ml"]
 optimi = ["torch-optimi"]
@@ -51,7 +52,7 @@ packages = ["src/coffeetrain"]
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E9", "F63", "F7", "F82"]
+select = ["E9", "F", "F63", "F7", "F82"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

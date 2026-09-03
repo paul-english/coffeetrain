@@ -56,10 +56,11 @@ The `train` command accepts hyperparameters from system/command signatures, incl
 ## 4. Add optional plugins
 
 ```python
-from coffeetrain import Trainer, ema_plugin, save_best_model_plugin
+from coffeetrain import Trainer, ema_plugin, save_best_model_plugin, hf_accelerator
 
 trainer = Trainer()
 trainer.register_plugin([ema_plugin, save_best_model_plugin])
+# Add `hf_accelerator` when using `pip install coffeetrain[accelerate]`.
 ```
 
 Plugin parameter defaults become CLI flags, e.g. `--ema_decay 0.999` or `--save_best_model_dir ./checkpoints`.

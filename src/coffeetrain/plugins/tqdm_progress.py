@@ -128,8 +128,7 @@ def update_eval_progress(
     if not is_main_process or eval_progress_bar is None:
         return
 
-    # tqdm automatically updates, but we could add postfix here if needed
-    pass
+    # tqdm updates automatically when its wrapped iterable advances.
 
 
 @tqdm_progress.system('EVAL_AFTER')

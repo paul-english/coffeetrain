@@ -1,7 +1,7 @@
 from coffeetrain.plugin import Plugin
 
 cuda_accelerate = Plugin(
-    name='cuda_acclerate',
+    name='cuda_accelerate',
     description='Attempts to automatically move your model and data to the right cuda device.'
 )
 

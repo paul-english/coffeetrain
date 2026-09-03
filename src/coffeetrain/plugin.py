@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-import string
 import logging
-import inspect
-import random
 
 from coffeetrain.runtime import RuntimeInterfaceMixin
 

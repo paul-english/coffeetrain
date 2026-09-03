@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.2.1
+
+Bug-fix release for the plugin runtime and v2 examples.
+
+### Fixed
+
+- CLI hyperparameters now parse `--name value` and `--name=value` with typed values
+- State updates, list coercion, optional values, and literal/enum coercion
+- Block overrides now invoke async/sync replacement systems correctly
+- Graceful signal-handler installation/restoration and `stop_training` handling
+- Early stopping now monitors evaluation loss with patience and minimum delta
+- HuggingFace Accelerate plugin imports and integrates through a documented optional extra
+- BERT/HGNC example migrated fully to the v2 plugin API
+- Ruff checks now cover the full repository
+
 ## v0.2.0
 
 Breaking release promoting the v2 trainer architecture to the primary API.
